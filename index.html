@@ -359,14 +359,14 @@ const SESSION = 20 * 60;
 
 const SOUNDS = {
   stressed: [
-    { id: 'heavy-rain',   label: '🌧️ Heavy rain',   sub: 'for stress relief' },
-    { id: 'thunderstorm', label: '⛈️ Thunderstorm',  sub: 'for stress relief' },
-    { id: 'big-waves',    label: '🌊 Big waves',      sub: 'for stress relief' },
+    { id: 'heavy-rain',   label: '🌧️ Heavy rain',   sub: 'for stress relief', src: 'Music/Rainfall_Over_Bronze.mp3',  loop: true  },
+    { id: 'thunderstorm', label: '⛈️ Thunderstorm',  sub: 'for stress relief', src: 'Music/Rainfall_Over_Bronze.mp3',  loop: true  },
+    { id: 'big-waves',    label: '🌊 Big waves',      sub: 'for stress relief', src: 'Music/Waves crashing.mp3',        loop: false },
   ],
   calm: [
-    { id: 'soft-rain',    label: '🌦️ Soft rain',     sub: 'for gentle sleep' },
-    { id: 'forest-night', label: '🌲 Forest night',  sub: 'for gentle sleep' },
-    { id: 'gentle-waves', label: '🌊 Gentle waves',  sub: 'for gentle sleep' },
+    { id: 'soft-rain',    label: '🌦️ Soft rain',     sub: 'for gentle sleep',  src: 'Music/Rainfall_Over_Bronze.mp3',  loop: true  },
+    { id: 'forest-night', label: '🌲 Forest night',  sub: 'for gentle sleep',  src: 'Music/Forest moonlight.mp3',      loop: true  },
+    { id: 'gentle-waves', label: '🌊 Gentle waves',  sub: 'for gentle sleep',  src: 'Music/Waves crashing.mp3',        loop: false },
   ],
 };
 
@@ -487,22 +487,75 @@ function App() {
   const [dimming,  setDimming]  = useState(false);
   const [message]               = useState(() => GOODNIGHTS[Math.floor(Math.random()*GOODNIGHTS.length)]);
   const timerRef = useRef(null);
+  const audioRef = useRef(null);   // holds the current Audio instance
 
   const isIntense = mood && (mood==='stressed'||mood==='anxious');
   const soundSet  = isIntense ? SOUNDS.stressed : SOUNDS.calm;
-  const activeColor = isIntense ? 'purple' : 'teal';
+
+  // ── helpers ──────────────────────────────
+  const stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  };
+
+  const loadAndPlay = (soundObj) => {
+    stopAudio();
+    const a = new Audio(soundObj.src);
+    a.loop = soundObj.loop;
+    a.volume = 1;
+    audioRef.current = a;
+    a.play().catch(() => {}); // autoplay policy: swallow if blocked
+  };
 
   // set default track when mood is chosen
   useEffect(() => {
     if (mood) setTrack(soundSet[0].id);
   }, [mood]);
 
-  // timer
+  // play / pause audio in sync with playing state
+  useEffect(() => {
+    if (playing) {
+      const soundObj = soundSet.find(s => s.id === track) || soundSet[0];
+      // only create a new Audio if we don't already have one loaded for this track
+      if (!audioRef.current || audioRef.current._trackId !== track) {
+        stopAudio();
+        const a = new Audio(soundObj.src);
+        a.loop = soundObj.loop;
+        a._trackId = track;
+        audioRef.current = a;
+      }
+      audioRef.current.play().catch(() => {});
+    } else {
+      if (audioRef.current) audioRef.current.pause();
+    }
+  }, [playing]);
+
+  // when track changes while playing: swap audio immediately
+  useEffect(() => {
+    if (!track) return;
+    const soundObj = soundSet.find(s => s.id === track) || soundSet[0];
+    stopAudio();
+    const a = new Audio(soundObj.src);
+    a.loop = soundObj.loop;
+    a._trackId = track;
+    audioRef.current = a;
+    if (playing) a.play().catch(() => {});
+  }, [track]);
+
+  // session timer (runs independently of audio; audio loops as needed)
   useEffect(() => {
     if (playing) {
       timerRef.current = setInterval(() => {
         setElapsed(e => {
-          if (e+1 >= SESSION) { clearInterval(timerRef.current); setPlaying(false); goTo(5); return SESSION; }
+          if (e+1 >= SESSION) {
+            clearInterval(timerRef.current);
+            stopAudio();
+            setPlaying(false);
+            setScreen(5);
+            return SESSION;
+          }
           return e+1;
         });
       }, 1000);
@@ -510,9 +563,14 @@ function App() {
     return () => clearInterval(timerRef.current);
   }, [playing]);
 
-  // reset timer on leaving player
+  // stop audio and reset when leaving player screen
   useEffect(() => {
-    if (screen !== 4) { setPlaying(false); setElapsed(0); }
+    if (screen !== 4) {
+      setPlaying(false);
+      setElapsed(0);
+      stopAudio();
+      audioRef.current = null;
+    }
   }, [screen]);
 
   const goTo = n => setScreen(n);
