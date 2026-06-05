@@ -87,11 +87,9 @@
       color: var(--muted); max-width: 290px; margin-bottom: 32px;
     }
 
-    .pills { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 44px; }
-    .pill {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: 999px; padding: 7px 16px;
-      font-size: 13px; color: var(--muted);
+    .whisper {
+      font-size: 12px; color: var(--muted); text-align: center;
+      margin-bottom: 44px; letter-spacing: 0.02em;
     }
 
     .btn-primary {
@@ -281,7 +279,7 @@
     /* Sound grid */
     .sound-section { width: 100%; margin-bottom: 24px; }
     .sound-sec-label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
-    .sound-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .sound-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .sound-pill {
       background: var(--surface); border: 1px solid var(--border);
       border-radius: 999px; padding: 9px 16px;
@@ -357,24 +355,20 @@ const { useState, useEffect, useRef, useCallback } = React;
 
 const SESSION = 20 * 60;
 
-const SOUNDS = {
-  stressed: [
-    { id: 'heavy-rain',   label: '🌧️ Heavy rain',   sub: 'for stress relief', src: 'Music/Rainfall_Over_Bronze.mp3',  loop: true  },
-    { id: 'thunderstorm', label: '⛈️ Thunderstorm',  sub: 'for stress relief', src: 'Music/Rainfall_Over_Bronze.mp3',  loop: true  },
-    { id: 'big-waves',    label: '🌊 Big waves',      sub: 'for stress relief', src: 'Music/Waves crashing.mp3',        loop: false },
-  ],
-  calm: [
-    { id: 'soft-rain',    label: '🌦️ Soft rain',     sub: 'for gentle sleep',  src: 'Music/Rainfall_Over_Bronze.mp3',  loop: true  },
-    { id: 'forest-night', label: '🌲 Forest night',  sub: 'for gentle sleep',  src: 'Music/Forest moonlight.mp3',      loop: true  },
-    { id: 'gentle-waves', label: '🌊 Gentle waves',  sub: 'for gentle sleep',  src: 'Music/Waves crashing.mp3',        loop: false },
-  ],
-};
+const ALL_SOUNDS = [
+  { id: 'heavy-rain',   label: '🌧️ Heavy rain',   sub: 'for stress relief', src: 'Music/Rainfall_Over_Bronze.mp3', loop: true  },
+  { id: 'thunderstorm', label: '⛈️ Thunderstorm',  sub: 'for stress relief', src: 'Music/Rainfall_Over_Bronze.mp3', loop: true  },
+  { id: 'big-waves',    label: '🌊 Big waves',      sub: 'for stress relief', src: 'Music/Waves crashing.mp3',       loop: false },
+  { id: 'soft-rain',    label: '🌦️ Soft rain',     sub: 'for gentle sleep',  src: 'Music/Rainfall_Over_Bronze.mp3', loop: true  },
+  { id: 'forest-night', label: '🌲 Forest night',  sub: 'for gentle sleep',  src: 'Music/Forest moonlight.mp3',     loop: true  },
+  { id: 'gentle-waves', label: '🌊 Gentle waves',  sub: 'for gentle sleep',  src: 'Music/Waves crashing.mp3',       loop: false },
+];
 
-const MOOD_RECS = {
-  stressed: { hi: ['🌧️ Heavy rain', '⛈️ Thunderstorm', '🌊 Big waves'], lo: ['🌦️ Soft rain', '🌲 Forest night'] },
-  anxious:  { hi: ['🌧️ Heavy rain', '⛈️ Thunderstorm', '🌊 Big waves'], lo: ['🌦️ Soft rain', '🌲 Forest night'] },
-  tired:    { hi: ['🌦️ Soft rain', '🌲 Forest night', '🌊 Gentle waves'], lo: ['🌧️ Heavy rain', '⛈️ Thunderstorm'] },
-  calm:     { hi: ['🌦️ Soft rain', '🌲 Forest night', '🌊 Gentle waves'], lo: ['🌧️ Heavy rain', '⛈️ Thunderstorm'] },
+const MOOD_DEFAULT_TRACK = {
+  stressed: 'heavy-rain',
+  anxious:  'thunderstorm',
+  tired:    'soft-rain',
+  calm:     'gentle-waves',
 };
 
 const MOODS = [
@@ -490,7 +484,6 @@ function App() {
   const audioRef = useRef(null);   // holds the current Audio instance
 
   const isIntense = mood && (mood==='stressed'||mood==='anxious');
-  const soundSet  = isIntense ? SOUNDS.stressed : SOUNDS.calm;
 
   // ── helpers ──────────────────────────────
   const stopAudio = () => {
@@ -500,25 +493,15 @@ function App() {
     }
   };
 
-  const loadAndPlay = (soundObj) => {
-    stopAudio();
-    const a = new Audio(soundObj.src);
-    a.loop = soundObj.loop;
-    a.volume = 1;
-    audioRef.current = a;
-    a.play().catch(() => {}); // autoplay policy: swallow if blocked
-  };
-
-  // set default track when mood is chosen
+  // set default track when mood is chosen (mood-based pre-selection)
   useEffect(() => {
-    if (mood) setTrack(soundSet[0].id);
+    if (mood) setTrack(MOOD_DEFAULT_TRACK[mood] || ALL_SOUNDS[0].id);
   }, [mood]);
 
   // play / pause audio in sync with playing state
   useEffect(() => {
     if (playing) {
-      const soundObj = soundSet.find(s => s.id === track) || soundSet[0];
-      // only create a new Audio if we don't already have one loaded for this track
+      const soundObj = ALL_SOUNDS.find(s => s.id === track) || ALL_SOUNDS[0];
       if (!audioRef.current || audioRef.current._trackId !== track) {
         stopAudio();
         const a = new Audio(soundObj.src);
@@ -532,10 +515,10 @@ function App() {
     }
   }, [playing]);
 
-  // when track changes while playing: swap audio immediately
+  // when track changes: swap audio immediately
   useEffect(() => {
     if (!track) return;
-    const soundObj = soundSet.find(s => s.id === track) || soundSet[0];
+    const soundObj = ALL_SOUNDS.find(s => s.id === track) || ALL_SOUNDS[0];
     stopAudio();
     const a = new Audio(soundObj.src);
     a.loop = soundObj.loop;
@@ -580,7 +563,7 @@ function App() {
     setTimeout(() => { setDimming(false); setScreen(1); setMood(null); setTrack(null); }, 3000);
   };
 
-  const currentTrack = soundSet.find(s => s.id === track) || soundSet[0];
+  const currentTrack = ALL_SOUNDS.find(s => s.id === track) || ALL_SOUNDS[0];
   const remaining = SESSION - elapsed;
 
   const moodCard = id => {
@@ -606,13 +589,8 @@ function App() {
           <div className="eyebrow">Nightdrift</div>
           <h1 className="headline">Your phone, but <em>slower.</em></h1>
           <p className="subline">You deserve that quiet moment before sleep. Nightdrift gives it back — without the scroll.</p>
-          <div className="pills">
-            <span className="pill">No guilt</span>
-            <span className="pill">No effort</span>
-            <span className="pill">Just you</span>
-          </div>
+          <p className="whisper">No guilt · No effort · Just you</p>
           <button className="btn-primary" onClick={()=>goTo(2)}>Try tonight →</button>
-          <p className="footer-note">No sign-up needed.</p>
         </div>
       </div>
 
@@ -643,31 +621,14 @@ function App() {
         <div className="s3-body">
           <div className="s3-eyebrow">Before we start</div>
           <h2 className="s3-headline">How are you feeling right now?</h2>
-          <p className="s3-sub">We'll pick the right sounds for you.</p>
 
           <div className="mood-grid">
             {['stressed','anxious','tired','calm'].map(moodCard)}
           </div>
 
-          {mood && (() => {
-            const rec = MOOD_RECS[mood];
-            const hiClass = (isIntense) ? 'hi-purple' : 'hi-teal';
-            return (
-              <div className="rec-strip">
-                <div className="rec-label">Recommended for you</div>
-                <div className="sound-chips">
-                  {rec.hi.map(s => <span key={s} className={`chip ${hiClass}`}>{s}</span>)}
-                  {rec.lo.map(s => <span key={s} className="chip lo">{s}</span>)}
-                </div>
-              </div>
-            );
-          })()}
-
-          {mood && (
-            <button className="btn-primary" style={{maxWidth:'100%'}} onClick={()=>goTo(4)}>
-              Play these sounds
-            </button>
-          )}
+          <button className="btn-primary" style={{maxWidth:'100%'}} onClick={()=>goTo(4)}>
+            Play these sounds
+          </button>
         </div>
       </div>
 
@@ -688,14 +649,14 @@ function App() {
 
           <EQ playing={playing}/>
 
-          {/* Sound pills */}
+          {/* Sound grid — all sounds */}
           <div className="sound-section">
-            <div className="sound-sec-label">{isIntense ? 'Sounds for stress relief' : 'Sounds for gentle sleep'}</div>
-            <div className="sound-row">
-              {soundSet.map(s => (
+            <div className="sound-sec-label">All sounds</div>
+            <div className="sound-grid">
+              {ALL_SOUNDS.map(s => (
                 <button
                   key={s.id}
-                  className={`sound-pill ${track===s.id ? (isIntense?'active-purple':'active-teal') : ''}`}
+                  className={`sound-pill ${track===s.id ? 'active-teal' : ''}`}
                   onClick={() => { setTrack(s.id); setElapsed(0); }}
                 >
                   {s.label}
